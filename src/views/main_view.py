@@ -161,7 +161,13 @@ class MainView:
             tk.Button(row, text='...', command=browse_cmd, font=('Segoe UI', 7, 'bold'), width=3, relief='flat', bg='#ecf0f1', fg='#2c3e50').grid(row=0, column=2)
             return combo
         self.model_combo_file = create_file_row_combo(sec2, '', 'Model', self.browse_model_files)
-        self.ocr_model_combo = create_file_row_combo(sec2, '', 'Text (OCR)', self.browse_ocr_model_files)
+        # Text OCR model không cần thiết khi dùng model 4-class (yolo26x305.pt có class Text tích hợp)
+        # Tạo combo ẩn để duy trì backward compatibility
+        self.ocr_model_combo = ttk.Combobox(sec2, font=('Segoe UI', 7), width=16, state='readonly')
+        # Label thay thế thông báo dùng class Text từ model chính
+        ocr_info_row = tk.Frame(sec2, bg='#f8f9fa')
+        ocr_info_row.pack(fill=tk.X, pady=1)
+        
         self.video_combo = create_file_row_combo(sec2, '', 'Video', self.browse_video_files)
         sec3 = tk.Frame(control_frame, bg='#f8f9fa', relief='flat')
         sec3.pack(fill=tk.X, padx=12, pady=(0, 4))
@@ -488,25 +494,21 @@ class MainView:
             if model_files:
                 self.model_combo_file['values'] = model_files
                 self.ocr_model_combo['values'] = model_files
+                # Ưu tiên yolo26x305.pt (model 4-class tích hợp Text)
                 default_model = model_files[0]
                 for m in model_files:
-                    if m.lower() == 'best.pt':
+                    if m.lower() == 'yolo26x305.pt':
                         default_model = m
-                        break
-                self.model_combo_file.set(default_model)
-                self.model_path.set(str(models_dir / default_model))
-                default_ocr_model = model_files[0]
-                for m in model_files:
-                    if m.lower() == 'best(8).pt':
-                        default_ocr_model = m
                         break
                 else:
                     for m in model_files:
-                        if 'text' in m.lower() or 'ocr' in m.lower():
-                            default_ocr_model = m
+                        if m.lower() == 'best.pt':
+                            default_model = m
                             break
-                self.ocr_model_combo.set(default_ocr_model)
-                self.ocr_model_path.set(str(models_dir / default_ocr_model))
+                self.model_combo_file.set(default_model)
+                self.model_path.set(str(models_dir / default_model))
+                # OCR model path không cần thiết với model 4-class
+                self.ocr_model_path.set('')
         video_dir = project_root / 'videos'
         if video_dir.exists():
             self._video_folder = str(video_dir)

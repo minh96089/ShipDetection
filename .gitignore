@@ -13,7 +13,7 @@ Thumbs.db
 *.t7
 *.h5
 *.rar
-
+*.docx
 result_*/
 BieuDo/
 module_yolo/

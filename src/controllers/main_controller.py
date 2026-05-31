@@ -67,9 +67,10 @@ class MainController:
         if not self.view.model_path.get() or not self.view.output_dir.get():
             self.view.show_warning('Thiếu thông tin', 'Vui lòng chọn Model và Output!')
             return
-        if self.view.use_ocr_var.get() and (not self.view.ocr_model_path.get()):
-            self.view.show_warning('Thiếu thông tin', 'Bạn phải chọn Model Text (OCR) nếu bật chế độ OCR!')
-            return
+        # Model 4-class tích hợp class Text — không cần text_model_path riêng
+        # if self.view.use_ocr_var.get() and (not self.view.ocr_model_path.get()):
+        #     self.view.show_warning('Thiếu thông tin', 'Bạn phải chọn Model Text (OCR) nếu bật chế độ OCR!')
+        #     return
         try:
             img_sz = int(self.view.img_size_entry.get())
             skp = int(self.view.skip_frame_entry.get())
@@ -78,7 +79,21 @@ class MainController:
             return
         self.selected_track_id = None
         os.makedirs(self.view.output_dir.get(), exist_ok=True)
-        self.engine = YoloTester(model_path=self.view.model_path.get(), input_source=input_source, output_folder=self.view.output_dir.get(), conf=self.view.conf_val.get(), imgsz=img_sz, stride=skp, use_ocr=self.view.use_ocr_var.get(), text_model_path=self.view.ocr_model_path.get() if self.view.use_ocr_var.get() else None, tracker=self.view.tracker_path.get(), use_tracking_trace=self.view.use_tracking_trace_var.get(), use_roi=self.view.use_roi_var.get(), roi_polygon=self.view.roi_original_points if self.view.use_roi_var.get() else None)
+        self.engine = YoloTester(
+            model_path=self.view.model_path.get(),
+            input_source=input_source,
+            output_folder=self.view.output_dir.get(),
+            conf=self.view.conf_val.get(),
+            imgsz=img_sz,
+            stride=skp,
+            use_ocr=self.view.use_ocr_var.get(),
+            # text_model_path không cần nữa — model 4-class có class Text tích hợp
+            text_model_path=None,
+            tracker=self.view.tracker_path.get(),
+            use_tracking_trace=self.view.use_tracking_trace_var.get(),
+            use_roi=self.view.use_roi_var.get(),
+            roi_polygon=self.view.roi_original_points if self.view.use_roi_var.get() else None
+        )
         self.view.engine = self.engine
         self.engine.on_violation_alert = self._on_violation_alert
 
