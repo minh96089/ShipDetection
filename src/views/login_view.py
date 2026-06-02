@@ -20,8 +20,8 @@ class LoginView(tk.Toplevel):
         self.configure(bg='white')
         self.resizable(False, False)
         self.center_window(420, 550)
-        self.username_var = tk.StringVar()
-        self.password_var = tk.StringVar()
+        self.username_var = tk.StringVar(value='admin')
+        self.password_var = tk.StringVar(value='1')
         self.show_password = False
         self.setup_ui()
 

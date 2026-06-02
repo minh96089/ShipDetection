@@ -334,9 +334,20 @@ class YoloTester:
             )
             res = results[0]
 
-            # ── Vẽ frame cơ bản (không vẽ bbox Text lên video) ───────────────
-            # Lọc ra chỉ các box tàu để plot (ẩn class Text khỏi annotated frame)
+            # ── Vẽ frame chỉ với class tàu ───────────────────────────────────
             annotated_frame = self._plot_ship_only(res, frame)
+
+            # ── Extract Text bboxes từ kết quả detect — dùng cho cả vẽ lẫn OCR ─
+            text_bboxes = self._extract_text_bboxes_from_result(res)
+
+            # ── Vẽ Text bbox màu xanh lá (nhãn nhỏ) ─────────────────────────
+            for tb in text_bboxes:
+                tx1, ty1, tx2, ty2 = tb['box']
+                cv2.rectangle(annotated_frame, (tx1, ty1), (tx2, ty2), (0, 200, 80), 1)
+                lbl = f"Text {tb['conf']:.2f}"
+                cv2.putText(annotated_frame, lbl,
+                            (tx1 + 3, ty1 - 4),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 230, 80), 1)
 
             # ── ROI overlay ───────────────────────────────────────────────────
             if self.use_roi and self.roi_polygon:
@@ -347,9 +358,6 @@ class YoloTester:
                 y_org = int(self.roi_polygon[0][1] - 10)
                 cv2.putText(annotated_frame, 'RESTRICTED ZONE',
                             (x_org, y_org), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-            # ── Extract Text bboxes từ kết quả detect (class Text) ────────────
-            text_bboxes = self._extract_text_bboxes_from_result(res)
 
             # ── Xử lý từng detection ──────────────────────────────────────────
             new_current_objects = {}
