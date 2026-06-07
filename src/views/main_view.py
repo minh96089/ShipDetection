@@ -219,11 +219,11 @@ class MainView:
         self.btn_clear_roi = tk.Button(row_roi, text='🗑️ Xóa', font=('Segoe UI', 7, 'bold'), bg='#e74c3c', fg='white', relief='flat', cursor='hand2', padx=6, command=self.clear_roi)
         self.btn_clear_roi.pack(side=tk.LEFT)
 
-        self.alert_banner = tk.Label(control_frame, text='', font=('Segoe UI', 9, 'bold'), bg='#f8f9fa', fg='#f8f9fa', pady=2)
-        self.alert_banner.pack(fill=tk.X, padx=12)
         self._alert_flash_count = 0
         btn_frame = tk.Frame(control_frame, bg='#ffffff')
-        btn_frame.pack(fill=tk.X, padx=12, pady=(4, 8))
+        btn_frame.pack(fill=tk.X, padx=12, pady=(4, 4))
+        self.alert_banner = tk.Label(control_frame, text='', font=('Segoe UI', 9, 'bold'), bg='#f8f9fa', fg='#f8f9fa')
+        self.alert_banner.pack(fill=tk.X, padx=12, pady=0)
         btn_frame.grid_columnconfigure(0, weight=1)
         btn_frame.grid_columnconfigure(1, weight=1)
         btn_frame.grid_columnconfigure(2, weight=1)
@@ -258,15 +258,27 @@ class MainView:
         reset_btn.bind('<Leave>', on_btn_leave(reset_btn, '#7f8c8d'))
         self.detail_frame = tk.Frame(right_panel, bg='#ffffff', relief='flat', bd=0)
         self.detail_frame.grid(row=1, column=0, sticky='nsew', padx=0, pady=0)
-        self.detail_frame.pack_propagate(True)
+        self.detail_frame.pack_propagate(False)
         detail_header = tk.Frame(self.detail_frame, bg='#34495e', height=45)
         detail_header.pack(fill=tk.X, padx=0, pady=(0, 8))
         detail_header.pack_propagate(False)
         tk.Label(detail_header, text='🚢 CHI TIẾT TÀU', font=('Segoe UI', 11, 'bold'), bg='#34495e', fg='white').pack(pady=10)
-        self.detail_canvas = tk.Canvas(self.detail_frame, width=340, height=180, bg='#e8e8e8', relief='flat', bd=0)
-        self.detail_canvas.pack(pady=(0, 8), fill=tk.BOTH, expand=True, padx=10)
-        self.detail_text = tk.Label(self.detail_frame, text='👆 Click vào tàu trên video...', font=('Segoe UI', 9), wraplength=340, justify=tk.LEFT, bg='#ffffff', fg='#555555', pady=8, padx=10)
-        self.detail_text.pack(fill=tk.X)
+        detail_paned = ttk.PanedWindow(self.detail_frame, orient=tk.HORIZONTAL)
+        detail_paned.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 6))
+        img_pane = tk.Frame(detail_paned, bg='#e8e8e8', width=150)
+        img_pane.pack_propagate(False)
+        self.detail_canvas = tk.Canvas(img_pane, bg='#e8e8e8', relief='flat', bd=0)
+        self.detail_canvas.pack(fill=tk.BOTH, expand=True)
+        detail_paned.add(img_pane, weight=0)
+        txt_pane = tk.Frame(detail_paned, bg='#ffffff')
+        self.detail_text = tk.Text(
+            txt_pane, font=('Segoe UI', 9), wrap='word',
+            relief='flat', bd=0, bg='#ffffff', fg='#555555',
+            padx=6, pady=6, state='disabled', cursor='arrow'
+        )
+        self.detail_text.pack(fill=tk.BOTH, expand=True)
+        detail_paned.add(txt_pane, weight=1)
+        self.show_detail_text('\U0001f446 Click vào tàu trên video...')
 
     def browse_model_files(self):
         folder = filedialog.askdirectory(title='Chọn thư mục chứa model')
@@ -619,12 +631,19 @@ class MainView:
     def show_crop(self, img_cv):
         if img_cv is None or img_cv.size == 0:
             return
-        img = cv2.resize(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB), (330, 170))
+        self.detail_canvas.update_idletasks()
+        cw = self.detail_canvas.winfo_width() or 150
+        ch = self.detail_canvas.winfo_height() or 115
+        img = cv2.resize(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB), (max(1, cw), max(1, ch)))
         self.tk_crop = ImageTk.PhotoImage(image=Image.fromarray(img))
-        self.detail_canvas.create_image(170, 85, anchor=tk.CENTER, image=self.tk_crop)
+        self.detail_canvas.delete('all')
+        self.detail_canvas.create_image(cw // 2, ch // 2, anchor=tk.CENTER, image=self.tk_crop)
 
     def show_detail_text(self, text):
-        self.detail_text.config(text=text)
+        self.detail_text.config(state='normal')
+        self.detail_text.delete('1.0', 'end')
+        self.detail_text.insert('1.0', text)
+        self.detail_text.config(state='disabled')
 
     def show_warning(self, title, msg):
         messagebox.showwarning(title, msg)

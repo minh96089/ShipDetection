@@ -77,6 +77,16 @@ class MainController:
         except ValueError:
             self.view.show_error('Lỗi', 'Image Size và Skip Frame phải là số nguyên!')
             return
+        # Tự động làm tròn imgsz lên bội số 32 (yêu cầu của YOLO stride)
+        stride_32 = 32
+        img_sz_rounded = ((img_sz + stride_32 - 1) // stride_32) * stride_32
+        if img_sz_rounded != img_sz:
+            print(f'>> imgsz {img_sz} → làm tròn lên {img_sz_rounded} (bội số 32)')
+            img_sz = img_sz_rounded
+            self.view.img_size_entry.config(state='normal')
+            self.view.img_size_entry.delete(0, 'end')
+            self.view.img_size_entry.insert(0, str(img_sz))
+            self.view.img_size_entry.config(state='disabled')
         self.selected_track_id = None
         os.makedirs(self.view.output_dir.get(), exist_ok=True)
         self.engine = YoloTester(
@@ -96,6 +106,7 @@ class MainController:
         )
         self.view.engine = self.engine
         self.engine.on_violation_alert = self._on_violation_alert
+        self.engine.on_ocr_result = self._on_ocr_result_for_detail
 
         self.log_controller.set_output_folder(self.view.output_dir.get())
         self.view.img_size_entry.config(state='disabled')
@@ -225,10 +236,19 @@ class MainController:
             if x1 <= x_click <= x2 and y1 <= y_click <= y2:
                 self.selected_track_id = tid
                 self.view.show_crop(obj.get('crop'))
-                detail = f'🆔 ID Tracking: {tid}\n'
-                if obj.get('ocr') != '...':
-                    detail += f"🔢 Số hiệu: {obj['ocr']}\n"
-                detail += 'Đang phân tích...'
+                class_name = obj.get('class_name', '')
+                ocr_text = obj.get('ocr', '...')
+                detail = f'\U0001f194 ID Tracking: {tid}\n'
+                if class_name:
+                    detail += f'\U0001f6f3 Lo\u1ea1i: {class_name}\n'
+                if ocr_text and ocr_text != '...':
+                    detail += f'\U0001f522 S\u1ed1 hi\u1ec7u: {ocr_text}\n'
+                    detail += '\u2705 OCR ho\u00e0n t\u1ea5t'
+                else:
+                    detail += '\U0001f504 \u0110ang ph\u00e2n t\u00edch s\u1ed1 hi\u1ec7u...'
+                    # Trigger manual OCR nếu chưa có kết quả
+                    if self.engine.use_ocr and self.engine.ocr_engine is not None:
+                        self.engine.request_manual_ocr(tid)
                 self.view.show_detail_text(detail)
                 found = True
                 break
@@ -237,6 +257,21 @@ class MainController:
 
     def on_auto_ocr_complete(self, track_id, so_hieu, confidence=1.0, class_name='Unknown', crop_path=''):
         self.log_controller.on_auto_ocr_complete(track_id, so_hieu, confidence, class_name, crop_path)
+
+    def _on_ocr_result_for_detail(self, track_id, text, score):
+        """Callback từ OCR worker — cập nhật detail_text nếu tàu đang được chọn."""
+        if track_id != self.selected_track_id:
+            return
+        obj = getattr(self.engine, 'current_objects', {}).get(track_id, {})
+        class_name = obj.get('class_name', '')
+        def _update():
+            detail = f'\U0001f194 ID Tracking: {track_id}\n'
+            if class_name:
+                detail += f'\U0001f6f3 Lo\u1ea1i: {class_name}\n'
+            detail += f'\U0001f522 S\u1ed1 hi\u1ec7u: {text}\n'
+            detail += f'\u2705 \u0110\u1ed9 tin c\u1eady: {score:.1%}'
+            self.view.show_detail_text(detail)
+        self.root.after(0, _update)
 
     def _start_progress_polling(self):
         self._stop_progress_polling()

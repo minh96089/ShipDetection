@@ -43,6 +43,7 @@ class YoloTester:
         self.pause_event = threading.Event()
         self.pause_event.set()
         self.on_violation_alert = None
+        self.on_ocr_result = None  # callback(track_id, text, score) khi OCR xong
         self.ship_images_dir = os.path.join(self.output_folder, 'ship_images')
         os.makedirs(self.ship_images_dir, exist_ok=True)
         video_name = os.path.basename(input_source) if isinstance(input_source, str) else 'live_camera'
@@ -176,6 +177,12 @@ class YoloTester:
                     self.ocr_cache[track_id] = {'texts': [], 'final': None}
                 self.ocr_cache[track_id]['final'] = text
                 self._update_csv_after_ocr(track_id, text, score, class_name, img_path)
+                # Thông báo UI cập nhật chi tiết tàu nếu có callback
+                if self.on_ocr_result:
+                    try:
+                        self.on_ocr_result(track_id, text, score)
+                    except Exception:
+                        pass
                 self.ocr_queue.task_done()
             except queue.Empty:
                 if self.stop_event:
