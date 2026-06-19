@@ -1,0 +1,32 @@
+# --- Core Deep Learning ---
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+ultralytics==8.4.8
+paddlepaddle==2.6.2
+paddleocr==2.7.3
+torch==2.1.2
+torchvision==0.16.2
+torchaudio==2.1.2
+
+# --- Image Processing & GUI ---
+opencv-python==4.6.0.66
+opencv-contrib-python==4.6.0.66
+pillow==12.1.0
+numpy==1.26.4
+
+# --- Database & Data Handling ---
+pyodbc==5.3.0
+pandas==3.0.0
+openpyxl==3.1.5
+seaborn==0.13.2
+psycopg2-binary==2.9.11
+
+# --- Utilities ---
+tqdm==4.67.1
+PyYAML==6.0.2
+requests==2.32.5
+
+lap>=0.5.12
+scikit-learn
+pyinstaller
+tkcalendar
