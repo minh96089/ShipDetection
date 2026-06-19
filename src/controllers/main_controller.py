@@ -20,7 +20,7 @@ class MainController:
         self.engine = None
         self.thread = None
         self.selected_track_id = None
-        self.callbacks = {'choose_model': self.choose_model, 'choose_video': self.choose_video, 'start_process': self.start_process, 'stop_process': self.stop_process, 'toggle_pause': self.toggle_pause, 'reset_video': self.reset_video, 'refresh_current_page': self.refresh_current_page, 'refresh_database': None, 'on_canvas_click': self.on_canvas_click, 'on_tree_select': None, 'manual_ocr': None, 'edit_ghi_chu': None, 'on_closing': self.on_closing}
+        self.callbacks = {'choose_model': self.choose_model, 'choose_video': self.choose_video, 'start_process': self.start_process, 'stop_process': self.stop_process, 'toggle_pause': self.toggle_pause, 'reset_video': self.reset_video, 'refresh_current_page': self.refresh_current_page, 'refresh_database': None, 'on_canvas_click': self.on_canvas_click, 'on_tree_select': None, 'manual_ocr': None, 'edit_ghi_chu': None, 'on_closing': self.on_closing, 'on_logout': None}
         self._progress_poll_id = None
         self.view = MainView(self.root, self.callbacks)
         self.log_controller = LogController(self.root, self.view)
@@ -34,6 +34,7 @@ class MainController:
         self.callbacks['manual_ocr'] = self.log_controller.manual_ocr
         self.callbacks['edit_ghi_chu'] = self.log_controller.edit_ghi_chu
         self.callbacks['refresh_ships'] = self.ship_controller.refresh_ship_list
+        self.callbacks['on_logout'] = self.logout
         self.view.alerts_view.on_mark_reviewed = self.alerts_view_controller.on_mark_reviewed
         self.view.alerts_view.on_mark_resolved = self.alerts_view_controller.on_mark_resolved
         self.view.alerts_view.on_add_note = self.alerts_view_controller.on_add_note
@@ -107,10 +108,6 @@ class MainController:
         self.view.engine = self.engine
         self.engine.on_violation_alert = self._on_violation_alert
         self.engine.on_ocr_result = self._on_ocr_result_for_detail
-        # Khôi phục vùng OCR priority nếu người dùng đã kéo trước đó
-        if self.view.ocr_original_region is not None:
-            self.engine.ocr_priority_region = self.view.ocr_original_region
-            print(f'>> 🎯 Restored OCR priority region: {self.view.ocr_original_region}')
 
         self.log_controller.set_output_folder(self.view.output_dir.get())
         self.view.img_size_entry.config(state='disabled')
@@ -317,6 +314,18 @@ class MainController:
         except:
             pass
         return None
+
+    def logout(self):
+        from tkinter import messagebox
+        if not messagebox.askyesno('Đăng xuất', 'Bạn có chắc muốn đăng xuất không?', parent=self.root):
+            return
+        self.stop_process()
+        from src.controllers.auth_controller import CurrentUser
+        CurrentUser().clear()
+        on_logout_callback = getattr(self, '_on_logout_to_login', None)
+        self.root.destroy()
+        if on_logout_callback:
+            on_logout_callback()
 
     def on_closing(self):
         self.stop_process()

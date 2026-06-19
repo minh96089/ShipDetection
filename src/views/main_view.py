@@ -31,12 +31,6 @@ class MainView:
         self.roi_original_points = []
         self.drawing_roi = False
         self.roi_closed = False
-        # ── OCR Priority Region ────────────────────────────────────────────
-        self.drawing_ocr_region = False     # Đang trong chế độ kéo box OCR
-        self.ocr_region_start = None        # (cx, cy) — tọa độ canvas điểm bắt đầu
-        self.ocr_region_canvas = None       # (cx1,cy1,cx2,cy2) — tọa độ canvas hiện tại
-        self.ocr_original_region = None     # (x1,y1,x2,y2) — tọa độ gốc video
-        # ───────────────────────────────────────────────────────────
         self.last_frame = None
         self.last_scale = 1.0
         self.last_offset = (0, 0)
@@ -105,7 +99,18 @@ class MainView:
         # Hiển thị thông tin user đang đăng nhập ở góc phải
         current_user = CurrentUser()
         user_info = f'👤 {current_user.full_name or current_user.username}  [{current_user.role.upper()}]'
-        tk.Label(navbar, text=user_info, bg='#2c3e50', fg='#ecf0f1', font=('Arial', 9)).pack(side=tk.RIGHT, padx=15)
+        tk.Label(navbar, text=user_info, bg='#2c3e50', fg='#ecf0f1', font=('Arial', 9)).pack(side=tk.RIGHT, padx=(0, 5))
+        # Nút đăng xuất
+        logout_btn = tk.Button(
+            navbar, text='🚪 Đăng xuất',
+            bg='#c0392b', fg='white',
+            font=('Arial', 9, 'bold'),
+            relief='flat', cursor='hand2',
+            padx=10, pady=4,
+            activebackground='#e74c3c', activeforeground='white',
+            command=lambda: self.callbacks['on_logout']() if self.callbacks.get('on_logout') else None
+        )
+        logout_btn.pack(side=tk.RIGHT, padx=(0, 10))
 
     def show_frame(self, page_name):
         # Kiểm tra quyền trước khi chuyển trang
@@ -256,33 +261,6 @@ class MainView:
         self.btn_clear_roi = tk.Button(row_roi, text='🗑️ Xóa', font=('Segoe UI', 7, 'bold'), bg='#e74c3c', fg='white', relief='flat', cursor='hand2', padx=6, command=self.clear_roi)
         self.btn_clear_roi.pack(side=tk.LEFT)
         self._alert_flash_count = 0
-
-        # ── Section 5: OCR Priority Region (kéo box kiểu Snipping Tool) ──────
-        sec5 = tk.Frame(control_frame, bg='#f8f9fa', relief='flat')
-        sec5.pack(fill=tk.X, padx=12, pady=(0, 4))
-        tk.Label(sec5, text='🎯 OCR Priority Region', font=('Segoe UI', 9, 'bold'),
-                 bg='#f8f9fa', fg='#e67e22').pack(anchor='w', pady=(2, 3))
-        row_ocr_region = tk.Frame(sec5, bg='#f8f9fa')
-        row_ocr_region.pack(fill=tk.X, pady=2)
-        self.btn_draw_ocr_region = tk.Button(
-            row_ocr_region, text='✂️ Kéo Box OCR',
-            font=('Segoe UI', 7, 'bold'), bg='#e67e22', fg='white',
-            relief='flat', cursor='crosshair', padx=6,
-            command=self.toggle_ocr_region_mode
-        )
-        self.btn_draw_ocr_region.pack(side=tk.LEFT)
-        self.btn_clear_ocr_region = tk.Button(
-            row_ocr_region, text='🗑️ Xóa OCR Region',
-            font=('Segoe UI', 7, 'bold'), bg='#95a5a6', fg='white',
-            relief='flat', cursor='hand2', padx=6,
-            command=self.clear_ocr_region
-        )
-        self.btn_clear_ocr_region.pack(side=tk.LEFT, padx=(5, 0))
-        self.lbl_ocr_region_status = tk.Label(
-            sec5, text='Chưa có vùng', font=('Segoe UI', 7, 'italic'),
-            bg='#f8f9fa', fg='#95a5a6'
-        )
-        self.lbl_ocr_region_status.pack(anchor='w', pady=(1, 0))
         btn_frame = tk.Frame(control_frame, bg='#ffffff')
         btn_frame.pack(fill=tk.X, padx=12, pady=(4, 4))
         self.alert_banner = tk.Label(control_frame, text='', font=('Segoe UI', 9, 'bold'), bg='#f8f9fa', fg='#f8f9fa')
@@ -687,36 +665,6 @@ class MainView:
                             break
                         self.canvas_video.create_line(cx1, cy1, cx2, cy2, fill='red', width=2, tags='roi')
                         self.canvas_video.create_oval(cx1 - 4, cy1 - 4, cx1 + 4, cy1 + 4, fill='yellow', outline='red', tags='roi')
-                # ── Vẽ OCR Priority Region (màu vàng) ──────────────────────────
-                self.canvas_video.delete('ocr_region')
-                if self.ocr_original_region is not None:
-                    ox1, oy1, ox2, oy2 = self.ocr_original_region
-                    rx1, ry1 = self.original_to_canvas_coords(ox1, oy1)
-                    rx2, ry2 = self.original_to_canvas_coords(ox2, oy2)
-                    # Hình chữ nhật vàng, nét đứt
-                    self.canvas_video.create_rectangle(
-                        rx1, ry1, rx2, ry2,
-                        outline='#f1c40f', width=2, dash=(6, 3), tags='ocr_region'
-                    )
-                    # Label góc trên trái
-                    self.canvas_video.create_text(
-                        rx1 + 4, ry1 + 4, anchor='nw',
-                        text='🎯 OCR', fill='#f1c40f',
-                        font=('Segoe UI', 8, 'bold'), tags='ocr_region'
-                    )
-                    # 4 góc nhỏ
-                    for px, py in [(rx1, ry1), (rx2, ry1), (rx2, ry2), (rx1, ry2)]:
-                        self.canvas_video.create_oval(
-                            px-4, py-4, px+4, py+4,
-                            fill='#f1c40f', outline='', tags='ocr_region'
-                        )
-                # ── Preview khi đang kéo ──────────────────────────────────────
-                if self.drawing_ocr_region and self.ocr_region_canvas:
-                    dc1, dc2 = self.ocr_region_canvas[:2], self.ocr_region_canvas[2:]
-                    self.canvas_video.create_rectangle(
-                        dc1[0], dc1[1], dc2[0], dc2[1],
-                        outline='#f39c12', width=2, dash=(4, 2), tags='ocr_region'
-                    )
 
             except Exception as e:
                 print(f'Lỗi cập nhật frame: {e}')
@@ -791,14 +739,8 @@ class MainView:
         self._pan_start = None
         self.canvas_video.config(cursor='')
 
-    # ── OCR Priority Region — mouse handlers ─────────────────────────────
-
     def _on_canvas_left_press(self, event):
-        """Ghi nhận điểm bắt đầu kéo."""
-        if self.drawing_ocr_region:
-            self.ocr_region_start = (event.x, event.y)
-            self.ocr_region_canvas = (event.x, event.y, event.x, event.y)
-            return
+        """Xử lý click chuột trái trên canvas."""
         # Chế độ vẽ ROI được xử lý riêng
         if self.drawing_roi:
             rx, ry = self.canvas_to_original_coords(event.x, event.y)
@@ -810,84 +752,10 @@ class MainView:
             self.callbacks['on_canvas_click'](event)
 
     def _on_canvas_left_drag(self, event):
-        """Cập nhật preview hình chữ nhật khi kéo."""
-        if not self.drawing_ocr_region or self.ocr_region_start is None:
-            return
-        sx, sy = self.ocr_region_start
-        self.ocr_region_canvas = (sx, sy, event.x, event.y)
-        # Vẽ preview trực tiếp lên canvas (không cần update frame)
-        self.canvas_video.delete('ocr_preview')
-        self.canvas_video.create_rectangle(
-            sx, sy, event.x, event.y,
-            outline='#f39c12', width=2, dash=(4, 2), tags='ocr_preview'
-        )
+        pass
 
     def _on_canvas_left_release(self, event):
-        """Xác nhận vùng OCR khi thả chuột."""
-        if not self.drawing_ocr_region or self.ocr_region_start is None:
-            return
-        sx, sy = self.ocr_region_start
-        ex, ey = event.x, event.y
-        # Bỏ qua nếu box quá nhỏ
-        if abs(ex - sx) < 10 or abs(ey - sy) < 10:
-            self.canvas_video.delete('ocr_preview')
-            return
-        # Convert sang tọa độ gốc video
-        x1_orig, y1_orig = self.canvas_to_original_coords(min(sx, ex), min(sy, ey))
-        x2_orig, y2_orig = self.canvas_to_original_coords(max(sx, ex), max(sy, ey))
-        self.ocr_original_region = (
-            int(x1_orig), int(y1_orig),
-            int(x2_orig), int(y2_orig)
-        )
-        self.ocr_region_canvas = (min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey))
-        self.canvas_video.delete('ocr_preview')
-        # Tắt chế độ kéo
-        self.drawing_ocr_region = False
-        self.canvas_video.config(cursor='')
-        self.btn_draw_ocr_region.config(text='✂️ Kéo Box OCR', bg='#e67e22')
-        # Cập nhật engine nếu đang chạy
-        if self.engine:
-            self.engine.ocr_priority_region = self.ocr_original_region
-        # Cập nhật label trạng thái
-        r = self.ocr_original_region
-        self.lbl_ocr_region_status.config(
-            text=f'Vùng: ({r[0]},{r[1]}) → ({r[2]},{r[3]})',
-            fg='#e67e22'
-        )
-        self.redraw_current_frame()
-        print(f'>> 🎯 OCR Region set: {self.ocr_original_region}')
-
-    def toggle_ocr_region_mode(self):
-        """Bật/tắt chế độ kéo box OCR."""
-        self.drawing_ocr_region = not self.drawing_ocr_region
-        if self.drawing_ocr_region:
-            # Tắt chế độ vẽ ROI nếu đang bật
-            if self.drawing_roi:
-                self.drawing_roi = False
-                self.btn_draw_roi.config(text='✏️ Vẽ vùng', bg='#3498db')
-            self.btn_draw_ocr_region.config(text='❌ Hủy kéo', bg='#c0392b')
-            self.canvas_video.config(cursor='crosshair')
-            self.ocr_region_start = None
-            self.ocr_region_canvas = None
-        else:
-            self.btn_draw_ocr_region.config(text='✂️ Kéo Box OCR', bg='#e67e22')
-            self.canvas_video.config(cursor='')
-            self.canvas_video.delete('ocr_preview')
-
-    def clear_ocr_region(self):
-        """Xóa vùng OCR priority."""
-        self.ocr_original_region = None
-        self.ocr_region_canvas = None
-        self.ocr_region_start = None
-        self.drawing_ocr_region = False
-        self.btn_draw_ocr_region.config(text='✂️ Kéo Box OCR', bg='#e67e22')
-        self.canvas_video.config(cursor='')
-        self.canvas_video.delete('ocr_region')
-        self.canvas_video.delete('ocr_preview')
-        self.lbl_ocr_region_status.config(text='Chưa có vùng', fg='#95a5a6')
-        if self.engine:
-            self.engine.ocr_priority_region = None
-        print('>> 🗑️ OCR Region cleared')
+        pass
 
     # ─────────────────────────────────────────────────────────────
 

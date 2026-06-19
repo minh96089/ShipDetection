@@ -44,11 +44,9 @@ class YoloTester:
         self.pause_event.set()
         self.on_violation_alert = None
         self.on_ocr_result = None  # callback(track_id, text, score) khi OCR xong
-        # Vùng ưu tiên OCR do người dùng kéo (tọa độ gốc video): (x1, y1, x2, y2) hoặc None
-        self.ocr_priority_region = None
         self.ship_images_dir = os.path.join(self.output_folder, 'ship_images')
         os.makedirs(self.ship_images_dir, exist_ok=True)
-        video_name = os.path.basename(input_source)
+        video_name = os.path.basename(input_source) if isinstance(input_source, str) else 'live_camera'
         self.session_id = f'{video_name}_{int(time.time())}'
         print(f'>> Session ID: {self.session_id}')
         print(f'>> Loading YOLO: {model_path}')
@@ -463,28 +461,7 @@ class YoloTester:
                     # ── Tìm Text bbox tương ứng với tàu này ───────────────────
                     text_bbox = self._find_text_bbox_for_ship(box, text_bboxes)
                     text_crop = None
-
-                    # ── Ưu tiên OCR region do người dùng kéo ──────────────────
-                    if self.ocr_priority_region is not None:
-                        rx1, ry1, rx2, ry2 = self.ocr_priority_region
-                        # Tính giao của bbox tàu và OCR region
-                        ix1 = max(x1, rx1)
-                        iy1 = max(y1, ry1)
-                        ix2 = min(x2, rx2)
-                        iy2 = min(y2, ry2)
-                        if ix2 > ix1 + 5 and iy2 > iy1 + 5:
-                            h_frm, w_frm, _ = frame.shape
-                            cx1_r = max(0, ix1)
-                            cy1_r = max(0, iy1)
-                            cx2_r = min(w_frm, ix2)
-                            cy2_r = min(h_frm, iy2)
-                            region_crop = frame[cy1_r:cy2_r, cx1_r:cx2_r].copy()
-                            if region_crop.size > 0:
-                                text_crop = region_crop
-                                print(f'>> 🎯 OCR Priority Region hit: track_id={track_id} '
-                                      f'crop=({cx1_r},{cy1_r},{cx2_r},{cy2_r})')
-                    # Fallback: dùng text_bbox tự động nếu chưa có text_crop từ region
-                    if text_crop is None and text_bbox is not None:
+                    if text_bbox is not None:
                         h_frm, w_frm, _ = frame.shape
                         tb_x1 = max(0, text_bbox[0] - 3)
                         tb_y1 = max(0, text_bbox[1] - 3)
