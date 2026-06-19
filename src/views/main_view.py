@@ -31,6 +31,8 @@ class MainView:
         self.roi_original_points = []
         self.drawing_roi = False
         self.roi_closed = False
+        self.roi_drag_start = None       # (cx, cy) canvas — điểm bắt đầu kéo
+        self.roi_drag_canvas = None      # (cx1,cy1,cx2,cy2) — preview khi kéo
         self.last_frame = None
         self.last_scale = 1.0
         self.last_offset = (0, 0)
@@ -383,13 +385,17 @@ class MainView:
         if self.drawing_roi:
             self.roi_original_points.clear()
             self.roi_closed = False
+            self.roi_drag_start = None
+            self.roi_drag_canvas = None
             self.btn_draw_roi.config(text='❌ Hủy vẽ', bg='#e67e22')
+            self.canvas_video.config(cursor='crosshair')
             if self.engine:
                 self.engine.roi_polygon = []
-            self.show_info('Hướng dẫn', 'Click chuột trái vào video để thêm điểm.\nClick chuột phải để hoàn tất đóng vùng cấm.')
             self.redraw_current_frame()
         else:
             self.btn_draw_roi.config(text='✏️ Vẽ vùng', bg='#3498db')
+            self.canvas_video.config(cursor='')
+            self.canvas_video.delete('roi_preview')
             self.roi_closed = True
             if self.engine:
                 self.engine.roi_polygon = self.roi_original_points
@@ -399,7 +405,11 @@ class MainView:
         self.roi_original_points.clear()
         self.roi_closed = False
         self.drawing_roi = False
+        self.roi_drag_start = None
+        self.roi_drag_canvas = None
         self.btn_draw_roi.config(text='✏️ Vẽ vùng', bg='#3498db')
+        self.canvas_video.config(cursor='')
+        self.canvas_video.delete('roi_preview')
         if self.engine:
             self.engine.roi_polygon = []
         self.redraw_current_frame()
@@ -483,15 +493,6 @@ class MainView:
         if hasattr(self, 'last_frame') and self.last_frame is not None:
             self.update_frame(self.last_frame, 0)
 
-    def on_canvas_right_click(self, event):
-        if self.drawing_roi and len(self.roi_original_points) >= 3:
-            self.roi_closed = True
-            self.drawing_roi = False
-            self.btn_draw_roi.config(text='✏️ Vẽ vùng', bg='#3498db')
-            if self.engine:
-                self.engine.roi_polygon = self.roi_original_points
-            self.redraw_current_frame()
-            self.show_info('Thông báo', 'Đã thiết lập vùng cấm thành công!')
 
     def load_trackers(self):
         try:
@@ -661,10 +662,19 @@ class MainView:
                     for idx in range(n):
                         cx1, cy1 = canvas_points[idx]
                         cx2, cy2 = canvas_points[(idx + 1) % n]
-                        if not self.roi_closed and idx == n - 1:
-                            break
                         self.canvas_video.create_line(cx1, cy1, cx2, cy2, fill='red', width=2, tags='roi')
                         self.canvas_video.create_oval(cx1 - 4, cy1 - 4, cx1 + 4, cy1 + 4, fill='yellow', outline='red', tags='roi')
+                    if self.roi_closed and n >= 4:
+                        flat = [c for pt in canvas_points for c in pt]
+                        self.canvas_video.create_polygon(flat, outline='red', fill='red', stipple='gray25', width=2, tags='roi')
+                # Preview khi đang kéo
+                if self.drawing_roi and self.roi_drag_canvas:
+                    dc1, dc2 = self.roi_drag_canvas[:2], self.roi_drag_canvas[2:]
+                    self.canvas_video.delete('roi_preview')
+                    self.canvas_video.create_rectangle(
+                        dc1[0], dc1[1], dc2[0], dc2[1],
+                        outline='#e74c3c', width=2, dash=(6, 3), tags='roi_preview'
+                    )
 
             except Exception as e:
                 print(f'Lỗi cập nhật frame: {e}')
@@ -740,22 +750,60 @@ class MainView:
         self.canvas_video.config(cursor='')
 
     def _on_canvas_left_press(self, event):
-        """Xử lý click chuột trái trên canvas."""
-        # Chế độ vẽ ROI được xử lý riêng
+        """Ghi nhận điểm bắt đầu kéo vùng cấm hoặc click chọn tàu."""
         if self.drawing_roi:
-            rx, ry = self.canvas_to_original_coords(event.x, event.y)
-            self.roi_original_points.append((rx, ry))
-            self.redraw_current_frame()
+            self.roi_drag_start = (event.x, event.y)
+            self.roi_drag_canvas = (event.x, event.y, event.x, event.y)
             return
         # Mặc định: xử lý click chọn tàu
         if self.callbacks.get('on_canvas_click'):
             self.callbacks['on_canvas_click'](event)
 
     def _on_canvas_left_drag(self, event):
-        pass
+        """Cập nhật preview hình chữ nhật vùng cấm khi kéo."""
+        if not self.drawing_roi or self.roi_drag_start is None:
+            return
+        sx, sy = self.roi_drag_start
+        self.roi_drag_canvas = (sx, sy, event.x, event.y)
+        self.canvas_video.delete('roi_preview')
+        self.canvas_video.create_rectangle(
+            sx, sy, event.x, event.y,
+            outline='#e74c3c', width=2, dash=(6, 3), tags='roi_preview'
+        )
 
     def _on_canvas_left_release(self, event):
-        pass
+        """Xác nhận vùng cấm hình chữ nhật khi thả chuột."""
+        if not self.drawing_roi or self.roi_drag_start is None:
+            return
+        sx, sy = self.roi_drag_start
+        ex, ey = event.x, event.y
+        # Bỏ qua nếu kéo quá nhỏ
+        if abs(ex - sx) < 10 or abs(ey - sy) < 10:
+            self.canvas_video.delete('roi_preview')
+            return
+        # Tính 4 góc hình chữ nhật theo tọa độ gốc video (theo chiều kim đồng hồ)
+        x1, y1 = self.canvas_to_original_coords(min(sx, ex), min(sy, ey))
+        x2, y2 = self.canvas_to_original_coords(max(sx, ex), min(sy, ey))
+        x3, y3 = self.canvas_to_original_coords(max(sx, ex), max(sy, ey))
+        x4, y4 = self.canvas_to_original_coords(min(sx, ex), max(sy, ey))
+        self.roi_original_points = [
+            (int(x1), int(y1)),
+            (int(x2), int(y2)),
+            (int(x3), int(y3)),
+            (int(x4), int(y4)),
+        ]
+        self.roi_drag_canvas = (min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey))
+        self.canvas_video.delete('roi_preview')
+        # Hoàn tất, tắt chế độ vẽ
+        self.roi_closed = True
+        self.drawing_roi = False
+        self.roi_drag_start = None
+        self.btn_draw_roi.config(text='✏️ Vẽ vùng', bg='#3498db')
+        self.canvas_video.config(cursor='')
+        if self.engine:
+            self.engine.roi_polygon = self.roi_original_points
+        self.redraw_current_frame()
+        print(f'>> 🛡️ ROI rectangle set: {self.roi_original_points}')
 
     # ─────────────────────────────────────────────────────────────
 
